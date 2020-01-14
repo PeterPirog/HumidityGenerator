@@ -50,8 +50,11 @@ End If
 
 End Function
 
+#######################################################################################
+
+
 Function t(R As Variant)
-'temperatura z rezystancji - nie skoñczona!
+'temperatura z rezystancji - nie skoï¿½czona!
 Dim a, bo, c, Rtpw As Double
 Dim i, sum As Variant
 Dim B(0 To 15) As Variant
