@@ -1,5 +1,5 @@
 import numpy as np
-from GTC import ureal
+from GTC import ureal,exp,log,pow,rp
 
 class gen2500:
     def __init__(self,uncertainty_mode=False):
@@ -15,8 +15,8 @@ class gen2500:
         self.DewPoint=[]
         self.SVP_Tc=[] #saturation vapour pressure  for temperature of chamber
         self.SVP_Ts = []  # saturation vapour pressure  for temperature of saturator
-        self.f_TcPc=[] #enchancement factor for chamber pressure and temperature
-        self.f_TsPs = []  # enchancement factor for chamber pressure and temperature
+        self.f_TcPc=[] #enhancement factor for chamber pressure and temperature
+        self.f_TsPs = []  # enhancement factor for chamber pressure and temperature
 
 
         #data for GTC uncertainty mode
@@ -37,13 +37,18 @@ class gen2500:
         self.DewPoint_GTC=ureal(0,0) #GTC number
         self.SVP_Tc_GTC=ureal(0,0) #saturation vapour pressure  for temperature of chamber GTC number
         self.SVP_Ts_GTC=ureal(0,0)  # saturation vapour pressure  for temperature of saturator GTC number
-        self.f_TcPc_GTC=ureal(0,0) #enchancement factor for chamber pressure and temperature GTC number
-        self.f_TsPs_GTC=ureal(0,0)  # enchancement factor for chamber pressure and temperature GTC number
+        self.f_TcPc_GTC=ureal(0,0) #enhancement factor for chamber pressure and temperature GTC number
+        self.f_TsPs_GTC=ureal(0,0)  # enhancement factor for chamber pressure and temperature GTC number
         self.eta_u_GTC=ureal(self.eta,self.eta_u,label="Etha")
 
-    def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u__PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0):
+    def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u_PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0):
+        #convert initial values to proper format
+        self.Ps_GTC = Ps_PSI if conv.isGTC(Ps_PSI) else ureal(Ps_PSI,Ps_u_PSI,label='Ps')
+        self.Ts_GTC = Ts_C if conv.isGTC(Ts_C) else ureal(Ts_C, Ts_u_C, label='Ts')
+        self.Pc_GTC = Pc_PSI if conv.isGTC(Pc_PSI) else ureal(Pc_PSI, Pc_u_PSI, label='Pc')
+        self.Tc_GTC = Tc_C if conv.isGTC(Tc_C) else ureal(Tc_C, Ts_u_C, label='Tc')
 
-        Pass
+        print('self.Ps_GTC=',self.Ps_GTC.x,self.Ps_GTC.u)
 
 
     def summary(self):
@@ -58,8 +63,9 @@ class gen2500:
             print('Dew point = {} C'.format(self.DewPoint_GTC.x))
             print('Saturation vapour pressure - saturator = {} Pa'.format(self.SVP_Ts_GTC.x))
             print('Saturation vapour pressure - chamber = {} Pa'.format(self.SVP_Tc_GTC.x))
-            print('Enchancement factor - saturator = {} Pa'.format(self.f_TsPs_GTC.x))
-            print('Enchancement factor - chamber = {} Pa'.format(self.f_TcPc_GTC.x))
+            print('enhancement factor - saturator = {} Pa'.format(self.f_TsPs_GTC.x))
+            print('enhancement factor - chamber = {} Pa'.format(self.f_TcPc_GTC.x))
+            print('---------------------------------- ---------------------\n')
 
 
         else:
@@ -72,39 +78,231 @@ class gen2500:
             print('Dew point = {} C with standard uncertainty {}'.format(self.DewPoint_GTC.x,self.DewPoint_GTC.u))
             print('Saturation vapour pressure - saturator = {} Pa with standard uncertainty {}'.format(self.SVP_Ts_GTC.x,self.SVP_Ts_GTC.u))
             print('Saturation vapour pressure - chamber = {} Pa with standard uncertainty {}'.format(self.SVP_Tc_GTC.x,self.SVP_Tc_GTC.u))
-            print('Enchancement factor - saturator = {} Pa with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
-            print('Enchancement factor - chamber = {} Pa with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
-
-    #conversion functions
+            print('enhancement factor - saturator = {} Pa with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
+            print('enhancement factor - chamber = {} Pa with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
+            print('---------------------------------- ---------------------\n')
+    #conversion functions for humidity calculations
 class conv:
-
+    #checkin is type GTC uncertainty
     def isGTC(value):
         typeGTC=type(ureal(0,0))
         if type(value)==typeGTC:
             return True
         else:
             return  False
+    #converting float type to GTC uncertainty type
+    def float2GTC(value):
+        if conv.isGTC(value):
+            return value
+        else:
+            return ureal(value,0)
 
-    def PSI2Pa(value):
-        pass
-        #1 Pa = 0.0001450377 psi
+    #converting Pressure in PSI to Pascals
+    def PSI2Pa(PSI_value):
+        P=conv.float2GTC(PSI_value)
+        return 6894.7572931783*P
 
+    #converting Pressure in Pascals to PSI
+    def Pa2PSI(Pa_value):
+        P=conv.float2GTC(Pa_value)
+        return 0.0001450377*P
 
-def K2C(TempK):
-    TempC=TempK-273.15
-    return TempC
-def C2K(TempC):
-    TempK=TempC+273.15
-    return TempK
+    #converting temperature in Celsius degrees to Kelvin
+    def Kelvin2Celsius(K_value):
+        T = conv.float2GTC(K_value)
+        return T - 273.15
 
+    #converting temperature in Kelvin degrees to Celsius
+    def Celsius2Kelvin(C_value):
+        T = conv.float2GTC(C_value)
+        return T+273.15
 
+    #calculating saturation vapour pressure
+    def calculate_SVP(T_kelvin, method='wexler',medium='water'):
+        #possible options method='wexler' or 'sonntag', medium='water' or 'ice'
+        T=conv.float2GTC(T_kelvin)
+        SVP=ureal(0,0)
+        # WEXLER WATER
+        if (method=='wexler') and (medium=='water'):
+            s06=0 # sum of gi*T^(i-2) for  i=0:6
+            g=np.zeros(8)
+
+            g[0]=-2.83657440e3
+            g[1] = -6.02807656e3
+            g[2] = 1.95426361e1
+            g[3] = -2.73783019e-2
+            g[4] = 1.62616980e-5
+            g[5] = 7.02290560e-10
+            g[6] = -1.86800090e-13
+            g[7] = 2.71503050
+
+            for i in range(7):
+                s06+=g[i]*pow(T,i-2)
+            s7=g[7]*log(T)  #gi*ln(T) for  i=7
+            s07=s06+s7
+            SVP=exp(s07)
+        #WEXLER ICE
+        elif (method=='wexler') and (medium=='ice'):
+            s04=0 # sum of ki*T^(i-1) for  i=0:4
+            k=np.zeros(6)
+
+            k[0]=-5.8666426e3
+            k[1] =2.2328702e1
+            k[2] =1.39387003e-2
+            k[3] =-3.42624020e-5
+            k[4] =2.7040955e-8
+            k[5] =6.70635220e-1
+
+            for i in range(5):
+                s04+=k[i]*pow(T,i-1)
+            s5=k[5]*log(T)  #ki*ln(T) for  i=5
+            s05=s04+s5
+            SVP=exp(s05)
+        #SONNTAG WATER
+        elif (method=='sonntag') and (medium=='water'):
+            s03=0 # sum of ki*T^(i-1) for  i=0:3
+            g=np.zeros(5)
+
+            g[0]=-6096.9385
+            g[1] =21.2409642
+            g[2] =-2.711193e-2
+            g[3] =1.673952e-5
+            g[4] =2.433502
+
+            for i in range(4):
+                s03+=g[i]*pow(T,i-1)
+            s4=g[4]*log(T)  #gi*ln(T) for  i=4
+            s04=s03+s4
+            SVP=exp(s04)
+        #SONNTAG ICE
+        elif (method=='sonntag') and (medium=='ice'):
+            s03=0 # sum of ki*T^(i-1) for  i=0:3
+            k=np.zeros(5)
+
+            k[0]=-6024.5282
+            k[1] =29.32707
+            k[2] =1.0613868e-2
+            k[3] =-1.3198825e-5
+            k[4] =-0.49382577
+
+            for i in range(4):
+                s03+=k[i]*pow(T,i-1)
+            s4=k[4]*log(T)  #ki*ln(T) for  i=4
+            s04=s03+s4
+            SVP=exp(s04)
+        else:
+            print("Error - possible options for function method='wexler' or 'sonntag', medium='water' or 'ice'")
+        return SVP
+    #calculate enhancement factor
+    def calculate_enh_fact(T_kelvin,P_Pa):
+        T = conv.float2GTC(T_kelvin)
+        P = conv.float2GTC(P_Pa)
+
+        if T.x<273.15:
+            medium='ice'
+        else:
+            medium='water'
+
+        #calculate vapour pressure eT
+        eT=conv.calculate_SVP(T,medium=medium)
+
+        #initialize a,b coefficient
+        A=np.zeros(4)
+        B=np.zeros(4)
+        if medium=='ice':
+            A[0]=-5.5898101e-2
+            A[1] =6.7140389e-4
+            A[2] =-2.7492721e-6
+            A[3] =3.8268958e-9
+            B[0]=-8.1985393e1
+            B[1] =5.8230823e-1
+            B[2] =-1.6340527e-3
+            B[3] =1.6725084e-6
+
+        elif medium=='water':
+            A[0]=-1.6302041e-1
+            A[1] =1.8071570e-3
+            A[2] =-6.7703064e-6
+            A[3] =8.5813609e-9
+            B[0]=-5.9890467e1
+            B[1] =3.4378043e-1
+            B[2] =-7.7326396e-4
+            B[3] =6.3405286e-7
+
+        a=ureal(0,0)
+        b=ureal(0,0)
+        #calculate a coefficient
+        for i in range(4):
+            a+=A[i]*pow(T,i)
+
+        # calculate b coefficient
+        for i in range(4):
+            b+=B[i]*pow(T,i)
+        b=exp(b)
+        s1=a*(1-eT/P)
+        s2 = b * (P/eT-1)
+        f=exp(s1+s2)
+        return f
+
+    def calculate_RH_from_PT(Ps_Pa,Ts_K,Pc_Pa,Tc_K,eta=1,verbose=False):
+        Ps = conv.float2GTC(Ps_Pa)
+        Ts = conv.float2GTC(Ts_K)
+        Pc = conv.float2GTC(Pc_Pa)
+        Tc = conv.float2GTC(Tc_K)
+        eta = conv.float2GTC(eta)
+
+        if Ps.label=='': Ps.label='Ps'
+        if Ts.label=='': Ts.label='Ts'
+        if Pc.label=='': Pc.label='Pc'
+        if Tc.label=='': Tc.label='Tc'
+        if eta.label == '': eta.label = 'eta'
+
+        eTs=conv.calculate_SVP(Ts)
+        eTc=conv.calculate_SVP(Tc)
+        fTsPs=conv.calculate_enh_fact(Ts,Ps)
+        fTcPc=conv.calculate_enh_fact(Tc,Pc)
+
+        RH=(Pc/Ps)*(fTsPs/fTcPc)*(eTs/eTc)*100*eta
+
+        if verbose==True:
+            print('Uncertainty budget')
+            for cpt in rp.budget(RH):
+                print("{0.label}:{0.u:.3f}".format(cpt))
+        return RH
+    def calculate_DewPoint2RH(DewPoint_K):
+        Pass
 ########################################################3
 
-g=gen2500(uncertainty_mode=True)
 
 
-g.summary()
-a=ureal(2,1)
-b=3
-print(conv.isGTC(a))
-print(conv.isGTC(b))
+a=ureal(290,0.03)
+b=290
+
+method='wexler'
+medium='water'
+
+#print('value=',conv.calculate_SVP(a,medium=medium,method=method).x,'U(value)=',2*conv.calculate_SVP(a,medium=medium,method=method).u,)
+#print('value=',conv.calculate_SVP(b,medium=medium,method=method))
+
+
+Ps=ureal(101300,0.5,label='Ps')
+Ts=ureal(275,0.01,label='Ts')
+Pc=ureal(101008,0.5,label='Pc')
+Tc=ureal(305,0.01,label='Tc')
+eta=ureal(1,0,label='eta')
+
+
+
+RH=conv.calculate_RH_from_PT(Ps,Ts,Pc,Tc,verbose=False,eta=eta)
+print('RH value=',RH.x,'U(f)=',2*RH.u)
+
+#Real data from generator
+gen=gen2500(uncertainty_mode=True)
+
+Ps_PSI=ureal(101300,0.5,label='Ps')
+Ts_C=ureal(275,0.01,label='Ts')
+Pc_PSI=ureal(101008,0.5,label='Pc')
+Tc_C=ureal(305,0.01,label='Tc')
+eta=ureal(1,0.01,label='eta')
+
+gen.set_values(Ps_PSI=Ps_PSI,Ts_C=Ts_C,Pc_PSI=Pc_PSI,Tc_C=Tc_C)
