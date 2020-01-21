@@ -1,12 +1,18 @@
 import numpy as np
-from GTC import ureal,exp,log,pow,rp
+from GTC import ureal,exp,log,pow,rp,type_a
 
 class gen2500:
     def __init__(self,uncertainty_mode=False):
-        self.Ps=[] #Saturation pressure
-        self.Ts=[] #Saturation temperature
-        self.Pc=[] #Chamber pressure
-        self.Tc=[] #Chamber pressure
+
+        self.Ps_input=[] #Saturation pressure PSI
+        self.Ts_input=[] #Saturation temperature C
+        self.Pc_input=[] #Chamber pressure PSI
+        self.Tc_input=[] #Chamber temperature C
+
+        self.Ps=[] #Saturation pressure Pa
+        self.Ts=[] #Saturation temperature K
+        self.Pc=[] #Chamber pressure Pa
+        self.Tc=[] #Chamber temperature K
         self.flow=20 # air flow in liters/min
         self.eta=1 #saturation efficiency coefficient
         self.k=2
@@ -39,47 +45,103 @@ class gen2500:
         self.SVP_Ts_GTC=ureal(0,0)  # saturation vapour pressure  for temperature of saturator GTC number
         self.f_TcPc_GTC=ureal(0,0) #enhancement factor for chamber pressure and temperature GTC number
         self.f_TsPs_GTC=ureal(0,0)  # enhancement factor for chamber pressure and temperature GTC number
-        self.eta_u_GTC=ureal(self.eta,self.eta_u,label="Etha")
+        self.eta_u_GTC=ureal(0,0)
 
-    def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u_PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0):
-        #convert initial values to proper format
+        # reset data for experiment
+        self.N=0 # number of iterations
+        self.history=[]
+        self.mean=0
+        self.std=0
+
+    def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u_PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0, eta=1,eta_u=0):
+
+        #print('Ts_C=',Ts_C)
+        #write initial values to object
+        self.Ps_input=Ps_PSI
+        self.Ts_input=Ts_C
+        self.Pc_input=Pc_PSI
+        self.Tc_input=Tc_C
+        self.flow=flow
+        self.eta=eta
+        self.eta_u=eta_u
+
+        #convert initial values to proper format -! values in PSI and Celsius !!!
         self.Ps_GTC = Ps_PSI if conv.isGTC(Ps_PSI) else ureal(Ps_PSI,Ps_u_PSI,label='Ps')
         self.Ts_GTC = Ts_C if conv.isGTC(Ts_C) else ureal(Ts_C, Ts_u_C, label='Ts')
         self.Pc_GTC = Pc_PSI if conv.isGTC(Pc_PSI) else ureal(Pc_PSI, Pc_u_PSI, label='Pc')
         self.Tc_GTC = Tc_C if conv.isGTC(Tc_C) else ureal(Tc_C, Ts_u_C, label='Tc')
+        self.eta_u_GTC = eta if conv.isGTC(eta) else ureal(eta, eta_u, label='eta')
 
-        print('self.Ps_GTC=',self.Ps_GTC.x,self.Ps_GTC.u)
+        #conversion of units
+        self.Ps_GTC=conv.PSI2Pa(self.Ps_GTC)
+        self.Ts_GTC=conv.Celsius2Kelvin(self.Ts_GTC)
+        self.Pc_GTC=conv.PSI2Pa(self.Pc_GTC)
+        self.Tc_GTC=conv.Celsius2Kelvin(self.Tc_GTC)
+
+
+        self.DewPoint=[]
+        self.SVP_Ts_GTC = conv.calculate_SVP(self.Ts_GTC)  # saturation vapour pressure  for temperature of saturator
+        self.SVP_Tc_GTC=conv.calculate_SVP(self.Tc_GTC) #saturation vapour pressure  for temperature of chamber
+        self.f_TsPs_GTC =conv.calculate_enh_fact(self.Ts_GTC,self.Ps_GTC) # enhancement factor for saturator pressure and temperature
+        self.f_TcPc_GTC = conv.calculate_enh_fact(self.Tc_GTC, self.Pc_GTC)  # enhancement factor for chamber pressure and temperature
+        self.RH_GTC=conv.calculate_RH_from_PT(self.Ps_GTC,self.Ts_GTC,self.Pc_GTC,self.Tc_GTC,self.eta_u_GTC)
+
+        self.SVP_Ts=self.SVP_Ts_GTC.x
+        self.SVP_Tc = self.SVP_Tc_GTC.x
+        self.f_TsPs=self.f_TsPs_GTC.x
+        self.f_TsPs = self.f_TsPs_GTC.x
+
+        #print('self.SVP_Ts=', self.SVP_Ts)
+        #print('self.SVP_Tc=',self.SVP_Tc)
+        #print('self.f_TsPs=', self.f_TsPs)
+        #print('self.f_TcPc=', self.f_TcPc)
+        #print('self.RH_GTC=', self.RH_GTC)
+
+        self.f_TcPc=[] #enhancement factor for chamber pressure and temperature
+        self.f_TsPs = []  # enhancement factor for chamber pressure and temperature
+        #self.RH = conv.calculate_RH_from_PT(self.Ps_GTC, self.Ts_GTC, self.Pc_GTC, self.Tc_GTC, self.eta_u_GTC)
+
+        # Data for experiment
+        self.N+=1
+        self.history.append(self.RH_GTC)
+        self.mean=type_a.mean(self.history)
+        self.std=type_a.standard_uncertainty(self.history) if self.N>1 else 0
+
+    def reset(self):
+        Pass
+
 
 
     def summary(self):
+        print('\n------------------------------------------------------------')
         print("Summary for humidity generator \n")
         if self.uncertainty_mode==False:
-            print('Saturator pressure= {} PSI'.format(self.Ps_GTC.x))
-            print('Saturator temperature= {} C'.format(self.Ts_GTC.x))
-            print('Chamber pressure= {} PSI'.format(self.Pc_GTC.x))
-            print('Chamber temperature= {} C'.format(self.Tc_GTC.x))
+            print('Saturator pressure= {} PSI'.format(self.Ps_input))
+            print('Saturator temperature= {} C'.format(self.Ts_input))
+            print('Chamber pressure= {} PSI'.format(self.Pc_input))
+            print('Chamber temperature= {} C'.format(self.Tc_input))
             print('\n--------------------- Calculations ---------------------')
             print('Relative humidity RH= {} %'.format(self.RH_GTC.x))
             print('Dew point = {} C'.format(self.DewPoint_GTC.x))
             print('Saturation vapour pressure - saturator = {} Pa'.format(self.SVP_Ts_GTC.x))
             print('Saturation vapour pressure - chamber = {} Pa'.format(self.SVP_Tc_GTC.x))
-            print('enhancement factor - saturator = {} Pa'.format(self.f_TsPs_GTC.x))
-            print('enhancement factor - chamber = {} Pa'.format(self.f_TcPc_GTC.x))
+            print('enhancement factor - saturator = {}'.format(self.f_TsPs_GTC.x))
+            print('enhancement factor - chamber = {}'.format(self.f_TcPc_GTC.x))
             print('---------------------------------- ---------------------\n')
 
 
         else:
-            print('Saturator pressure= {} PSI with standard uncertainty {}'.format(self.Ps_GTC.x,self.Ps_GTC.u))
-            print('Saturator temperature= {} C with standard uncertainty {}'.format(self.Ts_GTC.x, self.Ts_GTC.u))
-            print('Chamber pressure= {} PSI with standard uncertainty {}'.format(self.Pc_GTC.x,self.Pc_GTC.u))
-            print('Chamber temperature= {} C with standard uncertainty {}'.format(self.Tc_GTC.x, self.Tc_GTC.u))
+            print('Saturator pressure= {} Pa with standard uncertainty {}'.format(self.Ps_GTC.x,self.Ps_GTC.u))
+            print('Saturator temperature= {} K with standard uncertainty {}'.format(self.Ts_GTC.x, self.Ts_GTC.u))
+            print('Chamber pressure= {} Pa with standard uncertainty {}'.format(self.Pc_GTC.x,self.Pc_GTC.u))
+            print('Chamber temperature= {} K with standard uncertainty {}'.format(self.Tc_GTC.x, self.Tc_GTC.u))
             print('\n--------------------- Calculations ---------------------')
             print('Relative humidity RH= {} % with standard uncertainty {}'.format(self.RH_GTC.x,self.RH_GTC.u))
             print('Dew point = {} C with standard uncertainty {}'.format(self.DewPoint_GTC.x,self.DewPoint_GTC.u))
             print('Saturation vapour pressure - saturator = {} Pa with standard uncertainty {}'.format(self.SVP_Ts_GTC.x,self.SVP_Ts_GTC.u))
             print('Saturation vapour pressure - chamber = {} Pa with standard uncertainty {}'.format(self.SVP_Tc_GTC.x,self.SVP_Tc_GTC.u))
-            print('enhancement factor - saturator = {} Pa with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
-            print('enhancement factor - chamber = {} Pa with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
+            print('enhancement factor - saturator = {}  with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
+            print('enhancement factor - chamber = {}  with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
             print('---------------------------------- ---------------------\n')
     #conversion functions for humidity calculations
 class conv:
@@ -249,13 +311,13 @@ class conv:
         Ts = conv.float2GTC(Ts_K)
         Pc = conv.float2GTC(Pc_Pa)
         Tc = conv.float2GTC(Tc_K)
-        eta = conv.float2GTC(eta)
+        #eta = conv.float2GTC(eta)
 
         if Ps.label=='': Ps.label='Ps'
         if Ts.label=='': Ts.label='Ts'
         if Pc.label=='': Pc.label='Pc'
         if Tc.label=='': Tc.label='Tc'
-        if eta.label == '': eta.label = 'eta'
+        #if eta.label == '': eta.label = 'eta'
 
         eTs=conv.calculate_SVP(Ts)
         eTc=conv.calculate_SVP(Tc)
@@ -285,24 +347,32 @@ medium='water'
 #print('value=',conv.calculate_SVP(b,medium=medium,method=method))
 
 
-Ps=ureal(101300,0.5,label='Ps')
-Ts=ureal(275,0.01,label='Ts')
-Pc=ureal(101008,0.5,label='Pc')
-Tc=ureal(305,0.01,label='Tc')
-eta=ureal(1,0,label='eta')
+Ps=ureal(14.7,7e-5,label='Ps')
+Ts=ureal(2,0.01,label='Ts')
+Pc=ureal(14.65,7e-5,label='Pc')
+Tc=ureal(31,0.01,label='Tc')
+eta=ureal(1,0.001,label='eta')
 
 
 
-RH=conv.calculate_RH_from_PT(Ps,Ts,Pc,Tc,verbose=False,eta=eta)
-print('RH value=',RH.x,'U(f)=',2*RH.u)
+#RH=conv.calculate_RH_from_PT(Ps,Ts,Pc,Tc,verbose=True,eta=eta)
+#print('RH value=',RH.x,'U(f)=',2*RH.u)
 
 #Real data from generator
 gen=gen2500(uncertainty_mode=True)
 
-Ps_PSI=ureal(101300,0.5,label='Ps')
-Ts_C=ureal(275,0.01,label='Ts')
-Pc_PSI=ureal(101008,0.5,label='Pc')
-Tc_C=ureal(305,0.01,label='Tc')
-eta=ureal(1,0.01,label='eta')
+Ps_PSI=ureal(14.7,7e-5,label='Ps')
+Ts_C=ureal(2,0.01,label='Ts')
+Pc_PSI=ureal(14.65,7e-5,label='Pc')
+Tc_C=ureal(31,0.01,label='Tc')
 
-gen.set_values(Ps_PSI=Ps_PSI,Ts_C=Ts_C,Pc_PSI=Pc_PSI,Tc_C=Tc_C)
+
+#eta=ureal(1,0.01,label='eta')
+for i in range(5):
+    gen.set_values(Ps_PSI=Ps_PSI,Ts_C=Ts_C,Pc_PSI=Pc_PSI,Tc_C=Tc_C)
+    print('N=',gen.N, 'mean=',gen.mean, 'RHi=', gen.history[i])
+
+
+print('RH=',gen.RH_GTC.x,gen.RH_GTC.u)
+
+#gen.summary()
