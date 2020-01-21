@@ -1,4 +1,6 @@
 import numpy as np
+import pickle
+
 from GTC import ureal,exp,log,pow,rp,type_a
 
 class gen2500:
@@ -52,6 +54,7 @@ class gen2500:
         self.history=[]
         self.mean=0
         self.std=0
+        self.VISA_adres=""
 
     def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u_PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0, eta=1,eta_u=0):
 
@@ -374,5 +377,19 @@ for i in range(5):
 
 
 print('RH=',gen.RH_GTC.x,gen.RH_GTC.u)
+
+
+with open('gen.pickle', 'wb') as f:
+    pickle.dump(gen, f)
+
+with open('gen.pickle', 'rb') as f:
+    var_you_want_to_load_into = pickle.load(f)
+
+print(var_you_want_to_load_into)
+
+import visa
+rm = visa.ResourceManager()
+print(rm.list_resources())
+
 
 #gen.summary()
