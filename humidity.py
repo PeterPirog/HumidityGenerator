@@ -91,11 +91,14 @@ class gen2500:
         self.f_TsPs_GTC =conv.calculate_enh_fact(self.Ts_GTC,self.Ps_GTC) # enhancement factor for saturator pressure and temperature
         self.f_TcPc_GTC = conv.calculate_enh_fact(self.Tc_GTC, self.Pc_GTC)  # enhancement factor for chamber pressure and temperature
         self.RH_GTC=conv.calculate_RH_from_PT(self.Ps_GTC,self.Ts_GTC,self.Pc_GTC,self.Tc_GTC,self.eta_u_GTC)
+        self.DewPoint_GTC=conv.calculate_DewPoint2RH(self.RH_GTC,self.Tc_GTC)
 
         self.SVP_Ts=self.SVP_Ts_GTC.x
         self.SVP_Tc = self.SVP_Tc_GTC.x
         self.f_TsPs=self.f_TsPs_GTC.x
         self.f_TsPs = self.f_TsPs_GTC.x
+        self.RH=self.RH_GTC.x
+        self.DewPoint=self.DewPoint_GTC.x
 
         #print('self.SVP_Ts=', self.SVP_Ts)
         #print('self.SVP_Tc=',self.SVP_Tc)
@@ -151,6 +154,10 @@ class gen2500:
             print('enhancement factor - saturator = {}  with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
             print('enhancement factor - chamber = {}  with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
             print('---------------------------------- ---------------------\n')
+
+        print('-------  Uncertainty budget for RH ---------------')
+        for cpt in rp.budget(self.RH_GTC):
+            print("{0.label}:{0.u:.3f}".format(cpt))
 
 class VISA:
     def __init__(self):
@@ -296,6 +303,8 @@ class conv:
             SVP=exp(s04)
         else:
             print("Error - possible options for function method='wexler' or 'sonntag', medium='water' or 'ice'")
+
+        SVP=SVP+ureal(0,1,label='SVP_aprox')
         return SVP
     #calculate enhancement factor
     def calculate_enh_fact(T_kelvin,P_Pa):
@@ -373,8 +382,20 @@ class conv:
             for cpt in rp.budget(RH):
                 print("{0.label}:{0.u:.3f}".format(cpt))
         return RH
-    def calculate_DewPoint2RH(DewPoint_K):
-        Pass
+    def calculate_DewPoint2RH(RH,T_Kelvin):
+        #Calculation according to The relationship between Relative Humidity and the Dewpoint Temperature in moist Air, Mark G. Lawrence
+        RH = conv.float2GTC(RH)
+        T_Kelvin = conv.float2GTC(T_Kelvin)
+        T_Celsius=conv.Kelvin2Celsius(T_Kelvin)
+        #constants
+        A1=17.625
+        B1=243.03 #Celsius
+
+        numerattor=B1*(log(RH/100)+A1*T_Celsius/(B1+T_Celsius))
+        denominator=A1-log(RH/100)-A1*T_Celsius/(B1+T_Celsius)
+
+        DewPoint=numerattor/denominator
+        return DewPoint
 ########################################################3
 
 
@@ -414,11 +435,7 @@ with open('gen.pickle', 'wb') as f:
 with open('gen.pickle', 'rb') as f:
     var_you_want_to_load_into = pickle.load(f)
 
-print(var_you_want_to_load_into)
+#print( 'RH=',conv.calculate_DewPoint2RH(65,293.15))
 
 
-
-
-
-
-#gen.summary()
+gen.summary()

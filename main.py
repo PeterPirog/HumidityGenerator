@@ -14,7 +14,6 @@ Tc_C=ureal(31,0.01,label='Tc')
 
 gen.set_values(Ps_PSI=Ps_PSI,Ts_C=Ts_C,Pc_PSI=Pc_PSI,Tc_C=Tc_C)
 
-#print('RH=',gen.RH_GTC.x,gen.RH_GTC.u)
-#print(gen.flow)
 gen.summary()
 
+print('RH=',gen.RH)
