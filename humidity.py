@@ -54,7 +54,10 @@ class gen2500:
         self.history=[]
         self.mean=0
         self.std=0
-        self.VISA_adres=""
+
+        #initiate new object for storage VISA commands
+        self.VISA=VISA()
+
 
     def set_values(self,Ps_PSI,Ts_C,Pc_PSI,Tc_C,flow=20,Ps_u_PSI=0,Ts_u_C=0,Pu_u__PSI=0,Tc_u_C=0, eta=1,eta_u=0):
 
@@ -110,6 +113,8 @@ class gen2500:
         self.mean=type_a.mean(self.history)
         self.std=type_a.standard_uncertainty(self.history) if self.N>1 else 0
 
+        #VISA Datas
+
     def reset(self):
         Pass
 
@@ -146,6 +151,40 @@ class gen2500:
             print('enhancement factor - saturator = {}  with standard uncertainty {}'.format(self.f_TsPs_GTC.x,self.f_TsPs_GTC.u))
             print('enhancement factor - chamber = {}  with standard uncertainty {}'.format(self.f_TcPc_GTC.x,self.f_TcPc_GTC.u))
             print('---------------------------------- ---------------------\n')
+
+class VISA:
+    def __init__(self):
+        self.Adres=''
+        self.ReadActualValues_command='?'
+        self.ReadSetpoints_command='?SP'
+        self.ReaRunStatus_command='?R'
+        self.ReadErrorNumber_command='?ER'
+        self.ReadCabinetFanTemperature='?TF'
+        self.Start_command='RUN'
+        self.Stop_command='STOP'
+        self.PrintSystemData_command='PRINT'
+        self.ChangeRH_Pc_Setpoint_command='R1='
+        self.ChangeRH_PcTc_Setpoint_command = 'R2='
+        self.ChangeSaturationPressurePoint_command='PS='
+        self.ChangeSaturationTempSetpoint_command='TS='
+        self.ChangeFlowRateSetpoint_command='FS='
+
+        #system attributes
+        self.att_RH_Pc_actual=[]
+        self.att_RH_PcTc_actual = []
+        self.att_Ps_PSI_actual=[]
+        self.att_Ts_C_actual=[]
+        self.att_Pc_PSI_actual=[]
+        self.att_Tc_C_actual=[]
+        self.att_Flow_Rate_actual = []
+        self.att_System_Status=[]
+        self.att_RH_Pc_setpoint= []
+        self.att_RH_PcTc_setpoint = []
+        self.att_Ps_PSI_setpoint=[]
+        self.att_Flow_Rate_setpoint = []
+        self.att_Current_Control_Mode=[]
+        self.att_Errors=[]
+        self.att_Fan_Temperature=[]
     #conversion functions for humidity calculations
 class conv:
     #checkin is type GTC uncertainty
@@ -340,16 +379,6 @@ class conv:
 
 
 
-a=ureal(290,0.03)
-b=290
-
-method='wexler'
-medium='water'
-
-#print('value=',conv.calculate_SVP(a,medium=medium,method=method).x,'U(value)=',2*conv.calculate_SVP(a,medium=medium,method=method).u,)
-#print('value=',conv.calculate_SVP(b,medium=medium,method=method))
-
-
 Ps=ureal(14.7,7e-5,label='Ps')
 Ts=ureal(2,0.01,label='Ts')
 Pc=ureal(14.65,7e-5,label='Pc')
@@ -387,9 +416,9 @@ with open('gen.pickle', 'rb') as f:
 
 print(var_you_want_to_load_into)
 
-import visa
-rm = visa.ResourceManager()
-print(rm.list_resources())
+
+
+
 
 
 #gen.summary()
