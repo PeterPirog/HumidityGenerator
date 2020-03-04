@@ -118,9 +118,11 @@ def Calculate_temp_from_W(W):
     temp_c = Conv_kelvin2celsius(temp_k)
     print("W({})={}".format(temp_c, W))
     return temp_c
+'''
 while(1):
     temp=float(input('Set temperature in C: '))
 
     W=Calculate_Wr(temp)
     T = Calculate_temp_from_W(W)
     print("T=",T)
+'''
